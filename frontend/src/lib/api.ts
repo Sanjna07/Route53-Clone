@@ -1,9 +1,11 @@
-const DEFAULT_URLS = [
+let activeBaseUrl: string | null = null;
+
+const CANDIDATE_URLS = [
   process.env.NEXT_PUBLIC_API_BASE_URL,
-  "http://localhost:8000",
-  "http://127.0.0.1:8000",
   "http://localhost:8001",
   "http://127.0.0.1:8001",
+  "http://localhost:8000",
+  "http://127.0.0.1:8000",
 ].filter(Boolean) as string[];
 
 export class ApiError extends Error {
@@ -18,42 +20,63 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function tryFetch<T>(baseUrl: string, endpoint: string, options: RequestInit): Promise<T> {
+  const url = `${baseUrl}${endpoint}`;
   const headers = new Headers(options.headers || {});
   if (options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
-  let lastError: Error | null = null;
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
 
-  for (const baseUrl of DEFAULT_URLS) {
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const errorInfo = data?.error || {};
+    const msg = errorInfo.message || data?.detail || `HTTP Error ${response.status}`;
+    const code = errorInfo.code || `HTTP_${response.status}`;
+    const field = errorInfo.field || null;
+    throw new ApiError(msg, code, field);
+  }
+
+  return data as T;
+}
+
+export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  // If active backend URL is known, try it directly
+  if (activeBaseUrl) {
     try {
-      const url = `${baseUrl}${endpoint}`;
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: "include", // Essential for HTTP-only cookies
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const errorInfo = data?.error || {};
-        throw new ApiError(
-          errorInfo.message || "An unexpected error occurred",
-          errorInfo.code || `HTTP_${response.status}`,
-          errorInfo.field
-        );
-      }
-
-      return data as T;
+      return await tryFetch<T>(activeBaseUrl, endpoint, options);
     } catch (err: any) {
       if (err instanceof ApiError) {
         throw err;
       }
-      lastError = err;
+      activeBaseUrl = null;
     }
   }
 
-  throw new ApiError(lastError?.message || "Failed to connect to backend API server", "NETWORK_ERROR");
+  let lastNetworkError: any = null;
+
+  for (const baseUrl of CANDIDATE_URLS) {
+    try {
+      const result = await tryFetch<T>(baseUrl, endpoint, options);
+      activeBaseUrl = baseUrl;
+      return result;
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        activeBaseUrl = baseUrl;
+        throw err;
+      }
+      lastNetworkError = err;
+    }
+  }
+
+  throw new ApiError(
+    lastNetworkError?.message || "Failed to connect to backend server",
+    "NETWORK_ERROR"
+  );
 }

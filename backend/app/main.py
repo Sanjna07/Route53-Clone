@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.repositories.user_repository import UserRepository
-from app.routers import auth
+from app.routers import auth, zones, records
 
 # Initialize FastAPI App
 app = FastAPI(

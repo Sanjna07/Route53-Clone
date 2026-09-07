@@ -25,7 +25,7 @@ interface HostedZone {
   id: number;
   name: string;
   comment: string | null;
-  is_private: bool;
+  is_private: boolean;
   record_count: number;
   created_at: string;
   updated_at: string;
@@ -267,9 +267,9 @@ export default function HostedZonesPage() {
           }
           pagination={
             <Pagination
-              currentPage={currentPage}
+              currentPageIndex={currentPage}
               pagesCount={Math.ceil((data?.total || 0) / limit) || 1}
-              onChange={(e) => setCurrentPage(e.detail.currentPage)}
+              onChange={(e) => setCurrentPage(e.detail.currentPageIndex)}
             />
           }
         />

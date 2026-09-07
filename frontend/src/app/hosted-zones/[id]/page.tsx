@@ -360,9 +360,9 @@ export default function ZoneDetailsPage() {
           }
           pagination={
             <Pagination
-              currentPage={currentPage}
+              currentPageIndex={currentPage}
               pagesCount={Math.ceil((recordsData?.total || 0) / limit) || 1}
-              onChange={(e) => setCurrentPage(e.detail.currentPage)}
+              onChange={(e) => setCurrentPage(e.detail.currentPageIndex)}
             />
           }
         />
