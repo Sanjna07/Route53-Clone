@@ -111,4 +111,4 @@ npm install
 npm run dev
 ```
 
-Open **`route53-clone-flax.vercel.app`** in your browser.
+Live Link : route53-clone-flax.vercel.app
