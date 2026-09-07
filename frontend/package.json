@@ -1,0 +1,29 @@
+{
+  "name": "route53-clone-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@cloudscape-design/components": "^3.0.750",
+    "@cloudscape-design/design-tokens": "^3.0.50",
+    "@cloudscape-design/global-styles": "^1.0.35",
+    "@hookform/resolvers": "^3.3.4",
+    "@tanstack/react-query": "^5.28.9",
+    "next": "^14.1.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.51.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/react": "^18.2.67",
+    "@types/react-dom": "^18.2.22",
+    "typescript": "^5.4.3"
+  }
+}
