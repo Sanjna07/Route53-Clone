@@ -20,6 +20,7 @@ import { FlashbarProps } from "@cloudscape-design/components/flashbar";
 import Shell from "@/components/layout/Shell";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import KeyboardShortcuts from "@/components/common/KeyboardShortcuts";
 
 interface HostedZone {
   id: number;
@@ -168,6 +169,16 @@ export default function HostedZonesPage() {
       ]}
       notifications={notifications}
     >
+      <KeyboardShortcuts
+        onCreate={() => setCreateModalOpen(true)}
+        onRefresh={() => refetch()}
+        onEscape={() => {
+          setCreateModalOpen(false);
+          setEditModalOpen(false);
+          setDeleteModalOpen(false);
+        }}
+      />
+
       <SpaceBetween size="l">
         <Table
           columnDefinitions={[

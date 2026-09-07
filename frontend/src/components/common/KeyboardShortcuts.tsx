@@ -17,14 +17,47 @@ export default function KeyboardShortcuts({
 }: KeyboardShortcutsProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger hotkeys if user is actively typing in an input/textarea
-      const target = e.target as HTMLElement;
-      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      // Ignore if modifier keys (Ctrl, Cmd, Alt) are held down
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      if (e.key === "Escape" && onEscape) {
-        onEscape();
+      if (e.key === "Escape") {
+        if (onEscape) {
+          onEscape();
+        }
         return;
       }
+
+      // Handle '/' for search focus
+      if (e.key === "/") {
+        const target = e.target as HTMLElement;
+        const isInput =
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable;
+
+        if (!isInput) {
+          e.preventDefault();
+          if (onSearchFocus) {
+            onSearchFocus();
+          } else {
+            const searchInput = document.querySelector<HTMLInputElement>(
+              'input[type="search"], input[placeholder*="Find"], input[placeholder*="search"]'
+            );
+            if (searchInput) {
+              searchInput.focus();
+              searchInput.select();
+            }
+          }
+        }
+        return;
+      }
+
+      // Don't trigger single-letter hotkeys (C, R) if user is actively typing in an input/textarea
+      const target = e.target as HTMLElement;
+      const isInput =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
 
       if (isInput) return;
 
@@ -34,14 +67,11 @@ export default function KeyboardShortcuts({
       } else if (e.key.toLowerCase() === "r" && onRefresh) {
         e.preventDefault();
         onRefresh();
-      } else if (e.key === "/" && onSearchFocus) {
-        e.preventDefault();
-        onSearchFocus();
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [onCreate, onRefresh, onSearchFocus, onEscape]);
 
   return null;
