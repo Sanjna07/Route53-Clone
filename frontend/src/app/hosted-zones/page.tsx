@@ -85,10 +85,15 @@ export default function HostedZonesPage() {
     ]);
   };
 
-  // Create Mutation
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      return await apiFetch<HostedZone>("/hosted-zones", {
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+
+  const handleCreateZoneSubmit = async () => {
+    if (createSubmitting) return;
+    setCreateSubmitting(true);
+    setFormError(null);
+
+    try {
+      const newZone = await apiFetch<HostedZone>("/hosted-zones", {
         method: "POST",
         body: JSON.stringify({
           name: domainName,
@@ -96,19 +101,19 @@ export default function HostedZonesPage() {
           is_private: zoneTypeOption.value === "private",
         }),
       });
-    },
-    onSuccess: (newZone) => {
+
       queryClient.invalidateQueries({ queryKey: ["hosted-zones"] });
       setCreateModalOpen(false);
       setDomainName("");
       setComment("");
       setFormError(null);
       addNotification("success", `Successfully created hosted zone '${newZone.name}'`);
-    },
-    onError: (err: ApiError) => {
-      setFormError(err.message);
-    },
-  });
+    } catch (err: any) {
+      setFormError(err.message || "Failed to create hosted zone");
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
 
   // Edit Mutation
   const editMutation = useMutation({
@@ -292,8 +297,9 @@ export default function HostedZonesPage() {
               </Button>
               <Button
                 variant="primary"
-                loading={createMutation.isPending}
-                onClick={() => createMutation.mutate()}
+                loading={createSubmitting}
+                disabled={createSubmitting}
+                onClick={handleCreateZoneSubmit}
               >
                 Create hosted zone
               </Button>

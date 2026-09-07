@@ -1,11 +1,15 @@
 import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_PATH = BASE_DIR / "route53.db"
 
 class Settings:
     SECRET_KEY: str = os.getenv("SECRET_KEY", "super-secret-route53-key-2026")
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./route53.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
-    # CORS Origins - default includes localhost dev frontend
+    # CORS Origins - includes dev frontend and backend ports
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

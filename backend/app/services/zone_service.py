@@ -45,7 +45,13 @@ class ZoneService:
                 detail={"code": "DUPLICATE_ZONE", "message": f"Hosted zone '{normalized_name}' already exists", "field": "name"}
             )
 
-        return ZoneRepository.create(db, data)
+        zone = ZoneRepository.create(db, data)
+        try:
+            from app.repositories.record_repository import RecordRepository
+            RecordRepository.seed_default_aws_records(db, zone.id, zone.name)
+        except Exception:
+            pass
+        return ZoneRepository.get_by_id(db, zone.id)
 
     @staticmethod
     def update_zone(db: Session, zone_id: int, data: HostedZoneUpdate):

@@ -111,3 +111,39 @@ class RecordRepository:
         db.delete(record)
         db.commit()
         return True
+
+    @staticmethod
+    def seed_default_aws_records(db: Session, zone_id: int, zone_name: str):
+        # 1. NS Record with 4 standard AWS Name Servers
+        ns_servers = [
+            "ns-1536.awsdns-00.co.uk.",
+            "ns-0.awsdns-00.com.",
+            "ns-1024.awsdns-00.org.",
+            "ns-512.awsdns-00.net."
+        ]
+        ns_rec = DNSRecord(
+            hosted_zone_id=zone_id,
+            name=zone_name,
+            type="NS",
+            ttl=172800,
+            routing_policy="simple"
+        )
+        db.add(ns_rec)
+        db.flush()
+        for ns in ns_servers:
+            db.add(RecordValue(record_id=ns_rec.id, value=ns))
+
+        # 2. SOA Record (Start of Authority)
+        soa_val = f"ns-1536.awsdns-00.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"
+        soa_rec = DNSRecord(
+            hosted_zone_id=zone_id,
+            name=zone_name,
+            type="SOA",
+            ttl=900,
+            routing_policy="simple"
+        )
+        db.add(soa_rec)
+        db.flush()
+        db.add(RecordValue(record_id=soa_rec.id, value=soa_val))
+
+        db.commit()

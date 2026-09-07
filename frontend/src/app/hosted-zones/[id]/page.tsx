@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Table from "@cloudscape-design/components/table";
@@ -19,9 +19,13 @@ import Box from "@cloudscape-design/components/box";
 import KeyValuePairs from "@cloudscape-design/components/key-value-pairs";
 import Container from "@cloudscape-design/components/container";
 import Badge from "@cloudscape-design/components/badge";
+import Tabs from "@cloudscape-design/components/tabs";
 import { FlashbarProps } from "@cloudscape-design/components/flashbar";
 import Shell from "@/components/layout/Shell";
 import { apiFetch, ApiError } from "@/lib/api";
+import KeyboardShortcuts from "@/components/common/KeyboardShortcuts";
+import ExportZoneModal from "@/components/records/ExportZoneModal";
+import ImportZoneModal from "@/components/records/ImportZoneModal";
 
 interface HostedZone {
   id: number;
@@ -78,11 +82,14 @@ export default function ZoneDetailsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedItems, setSelectedItems] = useState<DNSRecord[]>([]);
   const [notifications, setNotifications] = useState<FlashbarProps.MessageDefinition[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Modal States
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Form Fields
   const [recordName, setRecordName] = useState("");
@@ -126,15 +133,20 @@ export default function ZoneDetailsPage() {
     ]);
   };
 
-  // Create Record Mutation
-  const createMutation = useMutation({
-    mutationFn: async () => {
+  const [createRecordSubmitting, setCreateRecordSubmitting] = useState(false);
+
+  const handleCreateRecordSubmit = async () => {
+    if (createRecordSubmitting) return;
+    setCreateRecordSubmitting(true);
+    setFormError(null);
+
+    try {
       const valuesArray = recordValuesText
         .split("\n")
         .map((v) => v.trim())
         .filter(Boolean);
 
-      return await apiFetch<DNSRecord>(`/hosted-zones/${zoneId}/records`, {
+      const newRec = await apiFetch<DNSRecord>(`/hosted-zones/${zoneId}/records`, {
         method: "POST",
         body: JSON.stringify({
           name: recordName,
@@ -144,8 +156,7 @@ export default function ZoneDetailsPage() {
           routing_policy: routingPolicy,
         }),
       });
-    },
-    onSuccess: (newRec) => {
+
       queryClient.invalidateQueries({ queryKey: ["dns-records", zoneId] });
       queryClient.invalidateQueries({ queryKey: ["hosted-zone", zoneId] });
       setCreateModalOpen(false);
@@ -153,11 +164,12 @@ export default function ZoneDetailsPage() {
       setRecordValuesText("");
       setFormError(null);
       addNotification("success", `Successfully created ${newRec.type} record for '${newRec.name}'`);
-    },
-    onError: (err: ApiError) => {
-      setFormError(err.message);
-    },
-  });
+    } catch (err: any) {
+      setFormError(err.message || "Failed to create DNS record");
+    } finally {
+      setCreateRecordSubmitting(false);
+    }
+  };
 
   // Edit Record Mutation
   const editMutation = useMutation({
@@ -221,11 +233,23 @@ export default function ZoneDetailsPage() {
       ]}
       notifications={notifications}
     >
+      <KeyboardShortcuts
+        onCreate={() => setCreateModalOpen(true)}
+        onRefresh={() => refetch()}
+        onEscape={() => {
+          setCreateModalOpen(false);
+          setEditModalOpen(false);
+          setDeleteModalOpen(false);
+          setExportModalOpen(false);
+          setImportModalOpen(false);
+        }}
+      />
+
       <SpaceBetween size="l">
         {/* Hosted Zone Header Details */}
         <Container
           header={
-            <Header variant="h2" description="Hosted zone details">
+            <Header variant="h2" description="Hosted zone overview">
               {zone?.name || "Hosted Zone"}
             </Header>
           }
@@ -241,130 +265,154 @@ export default function ZoneDetailsPage() {
           />
         </Container>
 
-        {/* DNS Records Table */}
-        <Table
-          columnDefinitions={[
+        {/* AWS Route 53 Tabs */}
+        <Tabs
+          tabs={[
             {
-              id: "name",
-              header: "Record name",
-              cell: (item) => (
-                <Box fontWeight="bold">
-                  {item.name}
-                </Box>
+              id: "records",
+              label: "Records",
+              content: (
+                <Table
+                  columnDefinitions={[
+                    {
+                      id: "name",
+                      header: "Record name",
+                      cell: (item) => <Box fontWeight="bold">{item.name}</Box>,
+                      sortingField: "name",
+                    },
+                    {
+                      id: "type",
+                      header: "Type",
+                      cell: (item) => <Badge color="blue">{item.type}</Badge>,
+                    },
+                    {
+                      id: "value",
+                      header: "Value / Route traffic to",
+                      cell: (item) => (
+                        <Box>
+                          {item.values.map((v, i) => (
+                            <div key={i}>{v}</div>
+                          ))}
+                        </Box>
+                      ),
+                    },
+                    {
+                      id: "ttl",
+                      header: "TTL (seconds)",
+                      cell: (item) => item.ttl,
+                    },
+                    {
+                      id: "routing_policy",
+                      header: "Routing policy",
+                      cell: (item) => item.routing_policy || "Simple",
+                    },
+                  ]}
+                  items={recordsData?.items || []}
+                  loading={isLoading}
+                  loadingText="Loading DNS records..."
+                  selectionType="single"
+                  selectedItems={selectedItems}
+                  onSelectionChange={(e) => setSelectedItems(e.detail.selectedItems)}
+                  trackBy="id"
+                  empty={
+                    <Box textAlign="center" color="inherit">
+                      <b>No records</b>
+                      <Box padding={{ bottom: "s" }} variant="p" color="inherit">
+                        No DNS records match the selected filter.
+                      </Box>
+                      <Button onClick={() => setCreateModalOpen(true)}>Create record</Button>
+                    </Box>
+                  }
+                  header={
+                    <Header
+                      variant="h2"
+                      counter={`(${recordsData?.total || 0})`}
+                      actions={
+                        <SpaceBetween direction="horizontal" size="xs">
+                          <Button onClick={() => refetch()} iconName="refresh" ariaLabel="Refresh records" />
+                          <Button onClick={() => setImportModalOpen(true)}>Import BIND file</Button>
+                          <Button onClick={() => setExportModalOpen(true)}>Export zone</Button>
+                          <Button
+                            disabled={!selectedRecord}
+                            onClick={() => {
+                              if (selectedRecord) {
+                                setEditValuesText(selectedRecord.values.join("\n"));
+                                setEditTtl(selectedRecord.ttl.toString());
+                                setEditModalOpen(true);
+                              }
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button disabled={!selectedRecord} onClick={() => setDeleteModalOpen(true)}>
+                            Delete
+                          </Button>
+                          <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
+                            Create record
+                          </Button>
+                        </SpaceBetween>
+                      }
+                    >
+                      Records
+                    </Header>
+                  }
+                  filter={
+                    <SpaceBetween direction="horizontal" size="xs">
+                      <div style={{ flexGrow: 1, minWidth: "240px" }}>
+                        <TextFilter
+                          filteringText={search}
+                          filteringPlaceholder="Find record by name"
+                          onChange={(e) => {
+                            setSearch(e.detail.filteringText);
+                            setCurrentPage(1);
+                          }}
+                        />
+                      </div>
+                      <div style={{ width: "200px" }}>
+                        <Select
+                          selectedOption={selectedTypeOption}
+                          onChange={(e) => {
+                            setSelectedTypeOption(e.detail.selectedOption as any);
+                            setCurrentPage(1);
+                          }}
+                          options={[
+                            { label: "All types", value: "" },
+                            ...RECORD_TYPES.map((r) => ({ label: r.value, value: r.value })),
+                          ]}
+                        />
+                      </div>
+                    </SpaceBetween>
+                  }
+                  pagination={
+                    <Pagination
+                      currentPageIndex={currentPage}
+                      pagesCount={Math.ceil((recordsData?.total || 0) / limit) || 1}
+                      onChange={(e) => setCurrentPage(e.detail.currentPageIndex)}
+                    />
+                  }
+                />
               ),
-              sortingField: "name",
             },
             {
-              id: "type",
-              header: "Type",
-              cell: (item) => <Badge color="blue">{item.type}</Badge>,
-            },
-            {
-              id: "value",
-              header: "Value / Route traffic to",
-              cell: (item) => (
-                <Box>
-                  {item.values.map((v, i) => (
-                    <div key={i}>{v}</div>
-                  ))}
-                </Box>
+              id: "details",
+              label: "Hosted zone details",
+              content: (
+                <Container header={<Header variant="h2">Hosted Zone Configuration</Header>}>
+                  <KeyValuePairs
+                    columns={2}
+                    items={[
+                      { label: "Zone ID", value: zone?.id?.toString() || "-" },
+                      { label: "Domain Name", value: zone?.name || "-" },
+                      { label: "Zone Type", value: zone?.is_private ? "Private Hosted Zone" : "Public Hosted Zone" },
+                      { label: "Record Count", value: zone?.record_count?.toString() || "0" },
+                      { label: "Created At", value: zone?.created_at ? new Date(zone.created_at).toUTCString() : "-" },
+                      { label: "Updated At", value: zone?.updated_at ? new Date(zone.updated_at).toUTCString() : "-" },
+                    ]}
+                  />
+                </Container>
               ),
-            },
-            {
-              id: "ttl",
-              header: "TTL (seconds)",
-              cell: (item) => item.ttl,
-            },
-            {
-              id: "routing_policy",
-              header: "Routing policy",
-              cell: (item) => item.routing_policy || "Simple",
             },
           ]}
-          items={recordsData?.items || []}
-          loading={isLoading}
-          loadingText="Loading DNS records..."
-          selectionType="single"
-          selectedItems={selectedItems}
-          onSelectionChange={(e) => setSelectedItems(e.detail.selectedItems)}
-          trackBy="id"
-          empty={
-            <Box textAlign="center" color="inherit">
-              <b>No records</b>
-              <Box padding={{ bottom: "s" }} variant="p" color="inherit">
-                No DNS records match the selected filter.
-              </Box>
-              <Button onClick={() => setCreateModalOpen(true)}>Create record</Button>
-            </Box>
-          }
-          header={
-            <Header
-              variant="h1"
-              counter={`(${recordsData?.total || 0})`}
-              actions={
-                <SpaceBetween direction="horizontal" size="xs">
-                  <Button onClick={() => refetch()} iconName="refresh" ariaLabel="Refresh records" />
-                  <Button
-                    disabled={!selectedRecord}
-                    onClick={() => {
-                      if (selectedRecord) {
-                        setEditValuesText(selectedRecord.values.join("\n"));
-                        setEditTtl(selectedRecord.ttl.toString());
-                        setEditModalOpen(true);
-                      }
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    disabled={!selectedRecord}
-                    onClick={() => setDeleteModalOpen(true)}
-                  >
-                    Delete
-                  </Button>
-                  <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
-                    Create record
-                  </Button>
-                </SpaceBetween>
-              }
-            >
-              Records
-            </Header>
-          }
-          filter={
-            <SpaceBetween direction="horizontal" size="xs">
-              <div style={{ flexGrow: 1, minWidth: "240px" }}>
-                <TextFilter
-                  filteringText={search}
-                  filteringPlaceholder="Find record by name"
-                  onChange={(e) => {
-                    setSearch(e.detail.filteringText);
-                    setCurrentPage(1);
-                  }}
-                />
-              </div>
-              <div style={{ width: "200px" }}>
-                <Select
-                  selectedOption={selectedTypeOption}
-                  onChange={(e) => {
-                    setSelectedTypeOption(e.detail.selectedOption as any);
-                    setCurrentPage(1);
-                  }}
-                  options={[
-                    { label: "All types", value: "" },
-                    ...RECORD_TYPES.map((r) => ({ label: r.value, value: r.value })),
-                  ]}
-                />
-              </div>
-            </SpaceBetween>
-          }
-          pagination={
-            <Pagination
-              currentPageIndex={currentPage}
-              pagesCount={Math.ceil((recordsData?.total || 0) / limit) || 1}
-              onChange={(e) => setCurrentPage(e.detail.currentPageIndex)}
-            />
-          }
         />
       </SpaceBetween>
 
@@ -385,8 +433,9 @@ export default function ZoneDetailsPage() {
               </Button>
               <Button
                 variant="primary"
-                loading={createMutation.isPending}
-                onClick={() => createMutation.mutate()}
+                loading={createRecordSubmitting}
+                disabled={createRecordSubmitting}
+                onClick={handleCreateRecordSubmit}
               >
                 Create records
               </Button>
@@ -416,10 +465,7 @@ export default function ZoneDetailsPage() {
             />
           </FormField>
 
-          <FormField
-            label="Value / Route traffic to"
-            description={currentTypeInfo.desc}
-          >
+          <FormField label="Value / Route traffic to" description={currentTypeInfo.desc}>
             <Textarea
               value={recordValuesText}
               onChange={(e) => setRecordValuesText(e.detail.value)}
@@ -516,6 +562,27 @@ export default function ZoneDetailsPage() {
           Are you sure you want to delete record <b>{selectedRecord?.name}</b> ({selectedRecord?.type})? This action cannot be undone.
         </Box>
       </Modal>
+
+      {/* Export Zone Modal */}
+      <ExportZoneModal
+        visible={exportModalOpen}
+        zoneId={parseInt(zoneId, 10)}
+        zoneName={zone?.name || ""}
+        onDismiss={() => setExportModalOpen(false)}
+      />
+
+      {/* Import Zone Modal */}
+      <ImportZoneModal
+        visible={importModalOpen}
+        zoneId={parseInt(zoneId, 10)}
+        zoneName={zone?.name || ""}
+        onDismiss={() => setImportModalOpen(false)}
+        onSuccess={(count) => {
+          queryClient.invalidateQueries({ queryKey: ["dns-records", zoneId] });
+          queryClient.invalidateQueries({ queryKey: ["hosted-zone", zoneId] });
+          addNotification("success", `Successfully imported ${count} DNS records from BIND file`);
+        }}
+      />
     </Shell>
   );
 }

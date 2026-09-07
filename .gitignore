@@ -5,6 +5,11 @@ env/
 __pycache__/
 *.py[cod]
 
+# SQLite Databases & temporary files
+*.db
+*.db-journal
+cookies.txt
+
 # Environment variables
 .env
 .env.*

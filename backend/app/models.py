@@ -47,7 +47,7 @@ class DNSRecord(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "type IN ('A','AAAA','CNAME','TXT','MX','NS','PTR','SRV','CAA')",
+            "type IN ('A','AAAA','CNAME','TXT','MX','NS','PTR','SRV','CAA','SOA')",
             name="check_record_type"
         ),
         Index("idx_records_zone_name_type", "hosted_zone_id", "name", "type"),

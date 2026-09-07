@@ -1,4 +1,4 @@
- # AWS Route53 Web Application Clone
+# AWS Route53 Web Application Clone
 
 A full-featured clone of the **AWS Route53** web application built with **Next.js** (TypeScript) and **FastAPI** (Python), backed by **SQLite**. 
 
@@ -6,43 +6,45 @@ This application faithfully recreates the AWS Route53 user interface, navigation
 
 ---
 
-## Key Features
+## 🌟 Key Features & Bonus Scope
 
-- **AWS Cloudscape UX**: 1:1 visual match with AWS Console layout (`AppLayout`, `TopNavigation`, `SideNavigation`, `BreadcrumbGroup`, `Table`, `Pagination`, `Modal`, `Flashbar`).
-- **Session Authentication**: Cookie-based auth with configurable environment settings (`SameSite=Lax` for local development, `SameSite=None; Secure=True` for cross-domain production deployments).
-- **Hosted Zones Management**: Full CRUD for Public and Private hosted zones with real-time search, sorting, and pagination.
-- **DNS Record Management**: Full CRUD for 9 common DNS record types:
-  - `A` (IPv4 format validation)
-  - `AAAA` (IPv6 format validation)
-  - `CNAME` (Single target validation & unique name conflict prevention)
-  - `MX` (Priority + Hostname format validation)
-  - `TXT` (Character limit checks)
-  - `NS`, `PTR`, `SRV`, `CAA` (Structured format validation)
-- **Normalized Database Design**: Separate `record_values` table with foreign key ON DELETE CASCADE.
-- **Placeholder AWS Console Sections**: Dashboard, Traffic Policies, Health Checks, Resolver, and Profiles.
-
----
-
-## Architecture Overview
-
-The system is designed as a clean **Modular Monolith** using a 3-tier layered architecture:
-
-```
-frontend/ (Next.js App Router + Cloudscape UI + TanStack Query)
-   │
-   ▼  HTTP / REST API (JSON + Signed Cookie)
-   │
-backend/ (FastAPI)
- ├── routers/       --> HTTP endpoints, request parsing & auth dependency checks
- ├── services/      --> Business logic, tiered DNS record validators & duplicate checks
- └── repositories/  --> SQLAlchemy database operations & SQLite per-connection FK listeners
-```
-
-> **Architectural Decision**: A single SQLite database with a tightly coupled domain model and single deployment target means a modular monolith is the optimal architecture choice over distributed microservices.
+- **AWS Cloudscape UX**: 1:1 visual match with AWS Console layout (`AppLayout`, `TopNavigation`, `SideNavigation`, `BreadcrumbGroup`, `Tabs`, `Table`, `Pagination`, `Modal`, `Flashbar`).
+- **Auto-Seeded AWS NS & SOA Records**: Creating a Hosted Zone automatically generates 4 authentic AWS Name Servers (`ns-xxx.awsdns-xx.org`) and SOA record, matching real AWS Route 53 behavior.
+- **BIND Zone File Export (Bonus)**: Export any Hosted Zone and its records as standard BIND `.zone` file syntax or JSON format.
+- **BIND Zone File Import (Bonus)**: Upload or paste BIND zone files to automatically parse `$ORIGIN`, `$TTL`, and record directives directly into a Hosted Zone.
+- **Keyboard Shortcuts (Bonus)**: Hotkeys for quick navigation:
+  - `C`: Open Create Zone / Record modal
+  - `/`: Focus table search bar
+  - `R`: Refresh current table
+  - `Esc`: Close open modal
+- **Dual Authentication**: Session persistence with both HTTP-Only Cookies and `Authorization: Bearer <token>` fallback for seamless cross-domain deployments (`vercel.app` -> `onrender.com`).
+- **Hosted Zones & DNS Records CRUD**: Full CRUD with search, pagination, and type filtering for 9 common DNS record types (`A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `PTR`, `SRV`, `CAA`).
+- **Automated Pytest Suite**: Full API test coverage in `backend/tests/test_api.py`.
 
 ---
 
-## Database Schema
+## 🏗 System Architecture & System Design Rationale
+
+```mermaid
+graph TD
+    Client[Next.js Client App Router] -->|HTTP / Credentials| RouterLayer[FastAPI Routers]
+    RouterLayer -->|Auth Check| ServiceLayer[Services Layer]
+    ServiceLayer -->|DNS Validation & BIND Parser| ServiceLayer
+    ServiceLayer -->|SQLAlchemy ORM| RepoLayer[Repository Layer]
+    RepoLayer -->|PRAGMA foreign_keys=ON| DB[(SQLite Database)]
+```
+
+### Architectural Rationale
+1. **Modular Monolith**: Single SQLite database file + tightly coupled zone/record domain + single deploy target means a 3-tier modular monolith is the optimal architectural call over distributed microservices.
+2. **Layered Decoupling**: 
+   - `routers/`: HTTP handling, request parsing, response formatting.
+   - `services/`: DNS record format validation, BIND parsing/exporting, cascade checks.
+   - `repositories/`: Database queries and entity operations.
+3. **SQLite Foreign Key Enforcement**: SQLite requires per-connection FK enforcement. Handled via SQLAlchemy `@event.listens_for(Engine, "connect")` listener executing `PRAGMA foreign_keys=ON;` on every opened connection.
+
+---
+
+## 🗄 Database Schema
 
 ```sql
 users (
@@ -65,7 +67,7 @@ dns_records (
   id INTEGER PRIMARY KEY,
   hosted_zone_id INTEGER NOT NULL REFERENCES hosted_zones(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK(type IN ('A','AAAA','CNAME','TXT','MX','NS','PTR','SRV','CAA')),
+  type TEXT NOT NULL CHECK(type IN ('A','AAAA','CNAME','TXT','MX','NS','PTR','SRV','CAA','SOA')),
   ttl INTEGER NOT NULL DEFAULT 300,
   routing_policy TEXT NOT NULL DEFAULT 'simple',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -82,19 +84,21 @@ record_values (
 
 ---
 
-## API Contract Overview
+## 🔌 API Specifications
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Server health check (`{"status": "ok"}`) |
-| `POST` | `/auth/login` | Login and set `auth_token` cookie |
-| `POST` | `/auth/logout` | Clear `auth_token` cookie |
+| `POST` | `/auth/login` | Login and set `auth_token` cookie & return Bearer token |
+| `POST` | `/auth/logout` | Clear session cookie |
 | `GET` | `/auth/me` | Fetch current session user |
 | `GET` | `/hosted-zones` | List hosted zones (search, pagination) |
-| `POST` | `/hosted-zones` | Create a new hosted zone |
+| `POST` | `/hosted-zones` | Create hosted zone (auto-seeds NS & SOA) |
 | `GET` | `/hosted-zones/{id}` | Get hosted zone details |
-| `PUT` | `/hosted-zones/{id}` | Update hosted zone |
+| `PUT` | `/hosted-zones/{id}` | Update hosted zone comment |
 | `DELETE` | `/hosted-zones/{id}` | Delete hosted zone (cascade deletes records & values) |
+| `GET` | `/hosted-zones/{id}/export` | Export zone as BIND (`.zone`) or JSON |
+| `POST` | `/hosted-zones/{id}/import` | Import BIND zone file content into zone |
 | `GET` | `/hosted-zones/{id}/records` | List DNS records (search, type filter, pagination) |
 | `POST` | `/hosted-zones/{id}/records` | Create DNS record |
 | `PUT` | `/hosted-zones/{id}/records/{rec_id}` | Update DNS record |
@@ -102,13 +106,9 @@ record_values (
 
 ---
 
-## Local Setup & Development
+## ⚙️ Local Setup & Automated Testing
 
-### 1. Prerequisites
-- **Node.js**: v18+
-- **Python**: 3.10+
-
-### 2. Backend Setup
+### 1. Backend Setup & Automated Tests
 ```bash
 cd backend
 python -m venv venv
@@ -118,16 +118,19 @@ python -m venv venv
 source venv/bin/activate
 
 pip install -r requirements.txt
+
+# Run Automated Pytest Suite
+python -m pytest tests/test_api.py -v
+
+# Run FastAPI Dev Server
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-
-Backend Swagger documentation will be available at: `http://127.0.0.1:8000/docs`
 
 Default Admin Credentials:
 - **Username**: `admin`
 - **Password**: `admin123`
 
-### 3. Frontend Setup
+### 2. Frontend Setup
 ```bash
 cd frontend
 npm install
@@ -138,17 +141,6 @@ Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## Deployment Instructions
-
-### Backend (Render / Fly.io)
-1. Deploy the `backend/` directory as a Python web service.
-2. Mount a persistent disk volume to persist the SQLite database file `route53.db`.
-3. Environment variables:
-   - `ENVIRONMENT=production`
-   - `ALLOWED_ORIGINS=https://your-frontend.vercel.app`
-   - `SECRET_KEY=your-production-secret-key`
-
-### Frontend (Vercel)
-1. Deploy the `frontend/` directory to Vercel.
-2. Environment variables:
-   - `NEXT_PUBLIC_API_BASE_URL=https://your-backend.onrender.com`
+## 🚀 Live Hosted Demo
+- **Live Frontend**: `https://route53-clone.vercel.app` (or your live Vercel URL)
+- **Live Backend Health**: `https://route53-backend.onrender.com/health` (or your Render URL)
