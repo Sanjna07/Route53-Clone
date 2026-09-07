@@ -62,7 +62,11 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         path="/"
     )
 
-    return user
+    return {
+        "id": user.id,
+        "username": user.username,
+        "token": token
+    }
 
 @router.post("/logout")
 def logout(response: Response):

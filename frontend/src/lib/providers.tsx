@@ -57,7 +57,10 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ username, password }),
       });
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
+      if (data?.token && typeof window !== "undefined") {
+        localStorage.setItem("auth_token", data.token);
+      }
       queryClient.setQueryData(["auth_me"], data);
       router.push("/hosted-zones");
     },
@@ -70,6 +73,9 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       });
     },
     onSuccess: () => {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth_token");
+      }
       queryClient.setQueryData(["auth_me"], null);
       router.push("/login");
     },

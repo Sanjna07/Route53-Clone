@@ -19,6 +19,7 @@ class LoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
+    token: Optional[str] = None
 
     class Config:
         from_attributes = True
