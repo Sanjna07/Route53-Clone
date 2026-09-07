@@ -23,7 +23,7 @@ export class ApiError extends Error {
 async function tryFetch<T>(baseUrl: string, endpoint: string, options: RequestInit): Promise<T> {
   const url = `${baseUrl}${endpoint}`;
   const headers = new Headers(options.headers || {});
-  if (options.body && !(options.body instanceof FormData)) {
+  if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -40,11 +40,23 @@ async function tryFetch<T>(baseUrl: string, endpoint: string, options: RequestIn
     credentials: "include",
   });
 
-  const data = await response.json().catch(() => null);
+  const contentType = response.headers.get("content-type") || "";
+  let data: any = null;
+
+  if (contentType.includes("application/json")) {
+    data = await response.json().catch(() => null);
+  } else {
+    const text = await response.text();
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
 
   if (!response.ok) {
-    const errorInfo = data?.error || {};
-    const msg = errorInfo.message || data?.detail || `HTTP Error ${response.status}`;
+    const errorInfo = (data && typeof data === "object") ? (data.error || {}) : {};
+    const msg = errorInfo.message || (data && typeof data === "object" ? data.detail : null) || (typeof data === "string" ? data : null) || `HTTP Error ${response.status}`;
     const code = errorInfo.code || `HTTP_${response.status}`;
     const field = errorInfo.field || null;
     throw new ApiError(msg, code, field);
