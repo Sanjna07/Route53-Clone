@@ -444,9 +444,10 @@ export default function ZoneDetailsPage() {
         }
       >
         <SpaceBetween size="l">
-          {formError && <Alert type="error">{formError}</Alert>}
+          {formError ? <Alert key="rec-form-error" type="error">{formError}</Alert> : null}
 
           <FormField
+            key="rec-name-field"
             label="Record name"
             description={`Subdomain name. Leave empty or type '@' for apex domain (${zone?.name || ""})`}
           >

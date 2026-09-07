@@ -77,7 +77,7 @@ export default function ExportZoneModal({ visible, zoneId, zoneName, onDismiss }
       }
     >
       <SpaceBetween size="l">
-        <FormField label="Export format">
+        <FormField key="export-format-field" label="Export format">
           <Select
             selectedOption={formatOption}
             onChange={(e) => {
@@ -91,11 +91,11 @@ export default function ExportZoneModal({ visible, zoneId, zoneName, onDismiss }
           />
         </FormField>
 
-        {previewContent && (
-          <FormField label="Export preview">
+        {previewContent ? (
+          <FormField key="export-preview-field" label="Export preview">
             <Textarea value={previewContent} readOnly rows={10} />
           </FormField>
-        )}
+        ) : null}
       </SpaceBetween>
     </Modal>
   );

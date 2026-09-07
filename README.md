@@ -1,46 +1,124 @@
 # AWS Route53 Web Application Clone
 
-A full-featured clone of the **AWS Route53** web application built with **Next.js** (TypeScript) and **FastAPI** (Python), backed by **SQLite**. 
+[![Next.js](https://img.shields.io/badge/Next.js-14.1.4-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-3-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![AWS Cloudscape](https://img.shields.io/badge/AWS_Cloudscape-Design_System-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://cloudscape.design/)
+[![Pytest](https://img.shields.io/badge/Pytest-Automated_Suite-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
 
-This application faithfully recreates the AWS Route53 user interface, navigation, table filters, record validators, cascading deletions, and core DNS management workflows using official **AWS Cloudscape Design System** components (`@cloudscape-design/components`).
-
----
-
-## 🌟 Key Features & Bonus Scope
-
-- **AWS Cloudscape UX**: 1:1 visual match with AWS Console layout (`AppLayout`, `TopNavigation`, `SideNavigation`, `BreadcrumbGroup`, `Tabs`, `Table`, `Pagination`, `Modal`, `Flashbar`).
-- **Auto-Seeded AWS NS & SOA Records**: Creating a Hosted Zone automatically generates 4 authentic AWS Name Servers (`ns-xxx.awsdns-xx.org`) and SOA record, matching real AWS Route 53 behavior.
-- **BIND Zone File Export (Bonus)**: Export any Hosted Zone and its records as standard BIND `.zone` file syntax or JSON format.
-- **BIND Zone File Import (Bonus)**: Upload or paste BIND zone files to automatically parse `$ORIGIN`, `$TTL`, and record directives directly into a Hosted Zone.
-- **Keyboard Shortcuts (Bonus)**: Hotkeys for quick navigation:
-  - `C`: Open Create Zone / Record modal
-  - `/`: Focus table search bar
-  - `R`: Refresh current table
-  - `Esc`: Close open modal
-- **Dual Authentication**: Session persistence with both HTTP-Only Cookies and `Authorization: Bearer <token>` fallback for seamless cross-domain deployments (`vercel.app` -> `onrender.com`).
-- **Hosted Zones & DNS Records CRUD**: Full CRUD with search, pagination, and type filtering for 9 common DNS record types (`A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `PTR`, `SRV`, `CAA`).
-- **Automated Pytest Suite**: Full API test coverage in `backend/tests/test_api.py`.
+A full-stack, enterprise-grade clone of the **AWS Route53** web application built with **Next.js** (TypeScript), **FastAPI** (Python), and **SQLite**, designed using the official **AWS Cloudscape Design System**.
 
 ---
 
-## 🏗 System Architecture & System Design Rationale
+## 🌟 Features & Scope
+
+### 🎨 AWS Cloudscape Design & Theme System
+- **Authentic AWS Console UX**: Recreates AWS Console navigation using Cloudscape `AppLayout`, `TopNavigation`, `SideNavigation`, `BreadcrumbGroup`, `Tabs`, `Table`, `Modal`, and `Flashbar`.
+- **AWS Dark Mode & Light Mode**: Seamless dark theme toggle integrated in `TopNavigation` via `@cloudscape-design/global-styles` (`applyMode(Mode.Dark)`), persisted in `localStorage`.
+
+### 🌐 Hosted Zones & Automatic Records
+- **Hosted Zone CRUD**: Create Public or Private hosted zones, update comments, and delete zones with full cascading record deletion.
+- **Auto-Seeded AWS NS & SOA Records**: Creating a Hosted Zone automatically generates 4 authentic AWS Name Servers (`ns-xxx.awsdns-xx.org`) and an SOA record, matching AWS Route 53 behavior.
+
+### 📜 BIND Zone File Import & Export
+- **BIND Zone Export**: Export any Hosted Zone and its records to standard BIND `.zone` file syntax or structured JSON. Includes live preview and file download.
+- **BIND Zone Import**: Upload or paste BIND zone files to parse `$ORIGIN`, `$TTL`, and record directives directly into a Hosted Zone.
+
+### ⌨️ Global Keyboard Shortcuts
+- **`C`**: Open Create modal (Hosted Zone or DNS Record)
+- **`R`**: Refresh current table data
+- **`/`**: Auto-focus table search input
+- **`Esc`**: Instantly close active modal dialogs
+
+### 🔐 Dual-Mode Authentication & Security
+- **Cross-Domain Session Management**: Supports both HTTP-Only Cookies and `Authorization: Bearer <token>` fallback for cross-domain deployments (`vercel.app` -> `onrender.com`).
+- **SQLite Integrity**: Connection-level Foreign Key enforcement via SQLAlchemy `PRAGMA foreign_keys=ON;` and ON DELETE CASCADE logic.
+
+---
+
+## 🏗 System Architecture
 
 ```mermaid
 graph TD
-    Client[Next.js Client App Router] -->|HTTP / Credentials| RouterLayer[FastAPI Routers]
-    RouterLayer -->|Auth Check| ServiceLayer[Services Layer]
-    ServiceLayer -->|DNS Validation & BIND Parser| ServiceLayer
-    ServiceLayer -->|SQLAlchemy ORM| RepoLayer[Repository Layer]
-    RepoLayer -->|PRAGMA foreign_keys=ON| DB[(SQLite Database)]
+    subgraph Frontend [Next.js 14 Client App Router]
+        UI[AWS Cloudscape Components]
+        Theme[Global Styles Mode Handler - Light/Dark]
+        QueryCache[TanStack React Query Cache]
+        Hotkeys[Keyboard Shortcuts Hook]
+    end
+
+    subgraph API [FastAPI Backend]
+        AuthRouter["Auth Router (/auth)"]
+        ZoneRouter["Zones Router (/hosted-zones)"]
+        RecordRouter["Records Router (/hosted-zones/{id}/records)"]
+        AuthMiddleware[Bearer / Cookie Auth Middleware]
+    end
+
+    subgraph ServiceLayer [Domain Service Layer]
+        ZoneService[Zone Service & Auto NS/SOA Seeder]
+        RecordService[Record Service & Syntax Validator]
+        Exporter[BIND / JSON Zone Exporter]
+        Parser[BIND Zone Parser]
+    end
+
+    subgraph Database [SQLite Storage Engine]
+        DB[(route53.db / test.db)]
+        FKPragma["PRAGMA foreign_keys=ON"]
+    end
+
+    UI --> Theme
+    UI --> QueryCache
+    QueryCache -->|HTTP + Bearer/Cookie| AuthMiddleware
+    AuthMiddleware --> AuthRouter
+    AuthMiddleware --> ZoneRouter
+    AuthMiddleware --> RecordRouter
+
+    ZoneRouter --> ZoneService
+    ZoneRouter --> Exporter
+    ZoneRouter --> Parser
+    RecordRouter --> RecordService
+
+    ZoneService --> RepoLayer[Repository Layer]
+    RecordService --> RepoLayer
+    RepoLayer --> FKPragma
+    FKPragma --> DB
 ```
 
-### Architectural Rationale
-1. **Modular Monolith**: Single SQLite database file + tightly coupled zone/record domain + single deploy target means a 3-tier modular monolith is the optimal architectural call over distributed microservices.
-2. **Layered Decoupling**: 
-   - `routers/`: HTTP handling, request parsing, response formatting.
-   - `services/`: DNS record format validation, BIND parsing/exporting, cascade checks.
-   - `repositories/`: Database queries and entity operations.
-3. **SQLite Foreign Key Enforcement**: SQLite requires per-connection FK enforcement. Handled via SQLAlchemy `@event.listens_for(Engine, "connect")` listener executing `PRAGMA foreign_keys=ON;` on every opened connection.
+---
+
+## 🔄 BIND Import & Export Data Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / Browser
+    participant Modal as Export / Import Modal
+    participant API as FastAPI Router
+    participant Service as Exporter / Parser Service
+    participant DB as SQLite DB
+
+    note over User, DB: BIND Zone File Export Pipeline
+    User->>Modal: Click "Export zone" & "Generate preview"
+    Modal->>API: GET /hosted-zones/{id}/export?format=bind
+    API->>DB: Fetch Zone & DNS Records
+    DB-->>API: Zone + Records Data
+    API->>Service: RecordExporter.export_to_bind(name, records)
+    Service-->>API: BIND zone string ($ORIGIN, $TTL, records)
+    API-->>Modal: Response (text/plain)
+    Modal-->>User: Render preview & enable .zone file download
+
+    note over User, DB: BIND Zone File Import Pipeline
+    User->>Modal: Upload .zone file or paste BIND text
+    Modal->>API: POST /hosted-zones/{id}/import (text/plain)
+    API->>Service: BINDParser.parse(content, zone_name)
+    Service-->>API: Parsed Record Objects List
+    loop For Each Parsed Record
+        API->>DB: Validate & Insert Record + Values
+    end
+    DB-->>API: Commit Transaction
+    API-->>Modal: JSON Response ({created_count, errors})
+    Modal-->>User: Refresh Records Table & Show Success Alert
+```
 
 ---
 
@@ -84,63 +162,68 @@ record_values (
 
 ---
 
-## 🔌 API Specifications
+## 🔌 API Endpoints Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Server health check (`{"status": "ok"}`) |
-| `POST` | `/auth/login` | Login and set `auth_token` cookie & return Bearer token |
-| `POST` | `/auth/logout` | Clear session cookie |
-| `GET` | `/auth/me` | Fetch current session user |
-| `GET` | `/hosted-zones` | List hosted zones (search, pagination) |
+| `POST` | `/auth/login` | Authenticate user & return token + set cookie |
+| `POST` | `/auth/logout` | Clear active session cookie |
+| `GET` | `/auth/me` | Retrieve currently authenticated user session |
+| `GET` | `/hosted-zones` | List hosted zones with search & pagination |
 | `POST` | `/hosted-zones` | Create hosted zone (auto-seeds NS & SOA) |
-| `GET` | `/hosted-zones/{id}` | Get hosted zone details |
+| `GET` | `/hosted-zones/{id}` | Get hosted zone metadata |
 | `PUT` | `/hosted-zones/{id}` | Update hosted zone comment |
 | `DELETE` | `/hosted-zones/{id}` | Delete hosted zone (cascade deletes records & values) |
-| `GET` | `/hosted-zones/{id}/export` | Export zone as BIND (`.zone`) or JSON |
-| `POST` | `/hosted-zones/{id}/import` | Import BIND zone file content into zone |
-| `GET` | `/hosted-zones/{id}/records` | List DNS records (search, type filter, pagination) |
-| `POST` | `/hosted-zones/{id}/records` | Create DNS record |
-| `PUT` | `/hosted-zones/{id}/records/{rec_id}` | Update DNS record |
+| `GET` | `/hosted-zones/{id}/export` | Export zone as BIND (`format=bind`) or JSON (`format=json`) |
+| `POST` | `/hosted-zones/{id}/import` | Import BIND zone file content into hosted zone |
+| `GET` | `/hosted-zones/{id}/records` | List DNS records with search & type filter |
+| `POST` | `/hosted-zones/{id}/records` | Create DNS record with syntax validation |
+| `PUT` | `/hosted-zones/{id}/records/{rec_id}` | Update DNS record values and TTL |
 | `DELETE` | `/hosted-zones/{id}/records/{rec_id}` | Delete DNS record |
 
 ---
 
-## ⚙️ Local Setup & Automated Testing
+## ⚙️ Local Setup & Testing Instructions
 
-### 1. Backend Setup & Automated Tests
+### 1. Backend Setup & Pytest Execution
+
 ```bash
+# Navigate to backend directory
 cd backend
-python -m venv venv
-# On Windows:
-.\venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
 
+# Create & activate virtual environment (Windows)
+python -m venv venv
+.\venv\Scripts\activate
+
+# On Linux/macOS:
+# source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 
 # Run Automated Pytest Suite
 python -m pytest tests/test_api.py -v
 
-# Run FastAPI Dev Server
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+# Start FastAPI Server
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-Default Admin Credentials:
+Default Credentials:
 - **Username**: `admin`
 - **Password**: `admin123`
 
 ### 2. Frontend Setup
+
 ```bash
+# Navigate to frontend directory
 cd frontend
+
+# Install packages
 npm install
+
+# Start Next.js Development Server
 npm run dev
 ```
 
 Open **`http://localhost:3000`** in your browser.
-
----
-
-## 🚀 Live Hosted Demo
-- **Live Frontend**: `https://route53-clone.vercel.app` (or your live Vercel URL)
-- **Live Backend Health**: `https://route53-backend.onrender.com/health` (or your Render URL)

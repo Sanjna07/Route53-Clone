@@ -88,9 +88,10 @@ export default function ImportZoneModal({
       }
     >
       <SpaceBetween size="l">
-        {errorMsg && <Alert type="error">{errorMsg}</Alert>}
+        {errorMsg ? <Alert key="import-error" type="error">{errorMsg}</Alert> : null}
 
         <FormField
+          key="upload-file-field"
           label="Upload .zone / .txt file"
           description="Select a standard BIND zone file from your computer"
         >
@@ -103,6 +104,7 @@ export default function ImportZoneModal({
         </FormField>
 
         <FormField
+          key="paste-content-field"
           label="Or paste BIND zone file content"
           description="Supports $ORIGIN, $TTL, A, AAAA, CNAME, TXT, MX, NS, PTR, SRV, CAA records"
         >

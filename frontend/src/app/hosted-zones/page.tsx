@@ -319,9 +319,10 @@ export default function HostedZonesPage() {
         }
       >
         <SpaceBetween size="l">
-          {formError && <Alert type="error">{formError}</Alert>}
+          {formError ? <Alert key="zone-form-error" type="error">{formError}</Alert> : null}
 
           <FormField
+            key="zone-domain-field"
             label="Domain name"
             description="Enter the name of the domain, such as example.com"
           >
